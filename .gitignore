@@ -2,3 +2,5 @@
 .DS_Store
 HRM.app/
 HRM.zip
+.swift-version
+.vscode/
