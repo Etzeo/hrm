@@ -42,6 +42,8 @@ final class TapHoldEngine {
     var syntheticModifierFlags: CGEventFlags = []
 
     func handleKeyDown(keyCode: UInt16, event: CGEvent, timestamp: TimeInterval) -> EventResult {
+        let isInitialKeyDown = event.getIntegerValueField(.keyboardEventAutorepeat) == 0
+
         // If this is a configured mod-tap key
         if let machine = machines[keyCode] {
             // Key was passed through on press (quick-tap or require-prior-idle),
@@ -74,12 +76,18 @@ final class TapHoldEngine {
             // mod-tap key (e.g. D) is pressed as a regular keystroke.
             let hand = KeyHandClassifier.hand(for: keyCode)
             var resolvedTapWhileHandlingKeyDown = false
-            for (code, m) in machines where code != keyCode && m.isUndecided {
-                let otherAction = m.onOtherKeyDown(hand: hand, at: timestamp)
-                if otherAction != .none {
-                    resolvedTapWhileHandlingKeyDown = resolvedTapWhileHandlingKeyDown
-                        || otherAction == .resolvedTap
-                    handleAction(otherAction, machine: m)
+            if isInitialKeyDown {
+                for (code, m) in machines where code != keyCode && m.isUndecided {
+                    let otherAction = m.onOtherKeyDown(
+                        keyCode: keyCode,
+                        hand: hand,
+                        at: timestamp
+                    )
+                    if otherAction != .none {
+                        resolvedTapWhileHandlingKeyDown = resolvedTapWhileHandlingKeyDown
+                            || otherAction == .resolvedTap
+                        handleAction(otherAction, machine: m)
+                    }
                 }
             }
 
@@ -138,10 +146,16 @@ final class TapHoldEngine {
             ))
         }
 
-        for (_, m) in machines where m.isUndecided {
-            let action = m.onOtherKeyDown(hand: hand, at: timestamp)
-            if action != .none {
-                handleAction(action, machine: m)
+        if isInitialKeyDown {
+            for (_, m) in machines where m.isUndecided {
+                let action = m.onOtherKeyDown(
+                    keyCode: keyCode,
+                    hand: hand,
+                    at: timestamp
+                )
+                if action != .none {
+                    handleAction(action, machine: m)
+                }
             }
         }
 
@@ -179,7 +193,11 @@ final class TapHoldEngine {
             let hand = KeyHandClassifier.hand(for: keyCode)
             for (code, m) in machines where code != keyCode && m.isUndecided {
                 if m.pressTimestamp < machine.pressTimestamp {
-                    let otherAction = m.onOtherKeyUp(hand: hand, at: timestamp)
+                    let otherAction = m.onOtherKeyUp(
+                        keyCode: keyCode,
+                        hand: hand,
+                        at: timestamp
+                    )
                     if otherAction != .none {
                         handleAction(otherAction, machine: m)
                     }
@@ -212,7 +230,11 @@ final class TapHoldEngine {
         }
 
         for (_, m) in machines where m.isUndecided {
-            let action = m.onOtherKeyUp(hand: hand, at: timestamp)
+            let action = m.onOtherKeyUp(
+                keyCode: keyCode,
+                hand: hand,
+                at: timestamp
+            )
             if action != .none {
                 handleAction(action, machine: m)
             }

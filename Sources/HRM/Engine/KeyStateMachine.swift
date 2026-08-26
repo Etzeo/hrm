@@ -28,6 +28,7 @@ final class KeyStateMachine {
     private let ignoreSpacebarForShiftModifiers: Bool
     private let bilateralFiltering: Bool
     private let holdTriggerOnRelease: Bool
+    private var triggerKeyCodes: Set<UInt16> = []
 
     init(binding: KeyBinding, config: Configuration) {
         self.binding = binding
@@ -58,6 +59,7 @@ final class KeyStateMachine {
     var isUndecided: Bool { state == .undecided }
 
     func forceUndecided(at timestamp: TimeInterval) {
+        triggerKeyCodes.removeAll()
         state = .undecided
         pressTimestamp = timestamp
     }
@@ -69,6 +71,8 @@ final class KeyStateMachine {
         if state == .hold || state == .undecided {
             return .none
         }
+
+        triggerKeyCodes.removeAll()
 
         // Quick-tap: if within quick-tap window, immediately resolve as tap
         if state == .quickTapWindow && quickTapTerm > 0 {
@@ -102,19 +106,27 @@ final class KeyStateMachine {
             resolveAsTap(at: timestamp)
             return .resolvedTap
         case .hold:
+            triggerKeyCodes.removeAll()
             state = .idle
             return .holdRelease
         case .tap:
             resolveAsTap(at: timestamp)
             return .resolvedTap
         default:
+            triggerKeyCodes.removeAll()
             state = .idle
             return .none
         }
     }
 
-    func onOtherKeyDown(hand: KeyHand, at timestamp: TimeInterval) -> KeyMachineAction {
+    func onOtherKeyDown(
+        keyCode: UInt16,
+        hand: KeyHand,
+        at timestamp: TimeInterval
+    ) -> KeyMachineAction {
         guard state == .undecided else { return .none }
+
+        triggerKeyCodes.insert(keyCode)
 
         // Bilateral filtering on key down (skip if holdTriggerOnRelease is enabled)
         if bilateralFiltering && !holdTriggerOnRelease && !isOppositeHand(hand) {
@@ -126,8 +138,14 @@ final class KeyStateMachine {
         return .none
     }
 
-    func onOtherKeyUp(hand: KeyHand, at timestamp: TimeInterval) -> KeyMachineAction {
-        guard state == .undecided else { return .none }
+    func onOtherKeyUp(
+        keyCode: UInt16,
+        hand: KeyHand,
+        at timestamp: TimeInterval
+    ) -> KeyMachineAction {
+        guard state == .undecided, triggerKeyCodes.remove(keyCode) != nil else {
+            return .none
+        }
 
         // Bilateral filtering on key up (only when holdTriggerOnRelease is enabled)
         if bilateralFiltering && holdTriggerOnRelease && !isOppositeHand(hand) {
@@ -135,6 +153,7 @@ final class KeyStateMachine {
         }
 
         // Timeless: other key pressed and released = hold
+        triggerKeyCodes.removeAll()
         state = .hold
         return .resolvedHold
     }
@@ -151,6 +170,7 @@ final class KeyStateMachine {
     // MARK: - Private
 
     private func resolveAsTap(at timestamp: TimeInterval) {
+        triggerKeyCodes.removeAll()
         lastTapTimestamp = timestamp
         if quickTapTerm > 0 {
             state = .quickTapWindow

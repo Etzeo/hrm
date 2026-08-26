@@ -65,8 +65,9 @@ struct TapHoldEngineTests {
         return (engine, delegate)
     }
 
-    func makeCGEvent(keyCode: UInt16, keyDown: Bool) -> CGEvent {
+    func makeCGEvent(keyCode: UInt16, keyDown: Bool, isAutoRepeat: Bool = false) -> CGEvent {
         let event = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: keyDown)!
+        event.setIntegerValueField(.keyboardEventAutorepeat, value: isAutoRepeat ? 1 : 0)
         return event
     }
 
@@ -122,6 +123,98 @@ struct TapHoldEngineTests {
         #expect(delegate.holds.count == 1)
         #expect(delegate.flushedEvents.count == 1)  // one flush call
         #expect(delegate.flushedEvents[0].count == 2)  // containing eDown + eUp
+    }
+
+    @Test("Key released after HRM source must have been pressed after it")
+    func preHeldKeyDoesNotResolveHold() {
+        let (engine, delegate) = makeEngine()
+
+        _ = engine.handleKeyDown(
+            keyCode: keyE,
+            event: makeCGEvent(keyCode: keyE, keyDown: true),
+            timestamp: 0.500
+        )
+        _ = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyE,
+            event: makeCGEvent(keyCode: keyE, keyDown: false),
+            timestamp: 1.050
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: false),
+            timestamp: 1.100
+        )
+
+        #expect(delegate.holds.isEmpty)
+        #expect(delegate.actionLog == [.tap("leftPinky")])
+        #expect(delegate.flushedEvents.count == 1)
+        #expect(delegate.flushedEvents[0].map(\.keyCode) == [keyE])
+    }
+
+    @Test("Pre-held opposite-hand key does not resolve bilateral hold")
+    func preHeldOppositeHandKeyDoesNotResolveHold() {
+        let (engine, delegate) = makeEngine(config: DefaultConfiguration.make())
+        let keyY = UInt16(kVK_ANSI_Y)
+
+        _ = engine.handleKeyDown(
+            keyCode: keyY,
+            event: makeCGEvent(keyCode: keyY, keyDown: true),
+            timestamp: 0.500
+        )
+        _ = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyY,
+            event: makeCGEvent(keyCode: keyY, keyDown: false),
+            timestamp: 1.050
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: false),
+            timestamp: 1.100
+        )
+
+        #expect(delegate.holds.isEmpty)
+        #expect(delegate.actionLog == [.tap("leftPinky")])
+        #expect(delegate.flushedEvents.count == 1)
+        #expect(delegate.flushedEvents[0].map(\.keyCode) == [keyY])
+    }
+
+    @Test("Repeat from pre-held key does not resolve hold")
+    func preHeldKeyRepeatDoesNotResolveHold() {
+        let (engine, delegate) = makeEngine()
+
+        _ = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+        _ = engine.handleKeyDown(
+            keyCode: keyE,
+            event: makeCGEvent(keyCode: keyE, keyDown: true, isAutoRepeat: true),
+            timestamp: 1.050
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyE,
+            event: makeCGEvent(keyCode: keyE, keyDown: false),
+            timestamp: 1.100
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: false),
+            timestamp: 1.150
+        )
+
+        #expect(delegate.holds.isEmpty)
+        #expect(delegate.actionLog == [.tap("leftPinky")])
     }
 
     @Test("Bilateral key-up rejects an unbound same-hand key")
