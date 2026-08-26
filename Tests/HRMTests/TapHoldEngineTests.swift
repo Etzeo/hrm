@@ -46,7 +46,9 @@ struct TapHoldEngineTests {
     let keyA: UInt16 = 0x00
     let keyS: UInt16 = 0x01
     let keyE: UInt16 = 0x0E  // non-mod-tap key
+    let keyF: UInt16 = 0x03
     let keyJ: UInt16 = 0x26
+    let keySpace: UInt16 = UInt16(kVK_Space)
 
     func makeConfig() -> Configuration {
         var config = DefaultConfiguration.make()
@@ -376,6 +378,109 @@ struct TapHoldEngineTests {
         let r2 = engine.handleKeyUp(keyCode: keyS, event: sUp, timestamp: 1.050)
         #expect(r2 == .passThrough)
         #expect(delegate.taps.isEmpty)  // still no synthetic tap
+    }
+
+    @Test("Require prior idle: Space permits Shift mod-tap")
+    func requirePriorIdleSpacePermitsShiftModTap() {
+        var config = makeConfig()
+        config.requirePriorIdleMs = 150
+        config.bilateralFiltering = true
+        let (engine, delegate) = makeEngine(config: config)
+
+        _ = engine.handleKeyDown(
+            keyCode: keySpace,
+            event: makeCGEvent(keyCode: keySpace, keyDown: true),
+            timestamp: 0.900
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keySpace,
+            event: makeCGEvent(keyCode: keySpace, keyDown: false),
+            timestamp: 0.950
+        )
+
+        let jDown = engine.handleKeyDown(
+            keyCode: keyJ,
+            event: makeCGEvent(keyCode: keyJ, keyDown: true),
+            timestamp: 1.000
+        )
+        let fDown = engine.handleKeyDown(
+            keyCode: keyF,
+            event: makeCGEvent(keyCode: keyF, keyDown: true),
+            timestamp: 1.050
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyF,
+            event: makeCGEvent(keyCode: keyF, keyDown: false),
+            timestamp: 1.080
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyJ,
+            event: makeCGEvent(keyCode: keyJ, keyDown: false),
+            timestamp: 1.100
+        )
+
+        #expect(jDown == .suppress)
+        #expect(fDown == .suppress)
+        #expect(delegate.actionLog == [
+            .hold("rightIndex"),
+            .tap("leftIndex"),
+            .holdRelease("rightIndex"),
+        ])
+    }
+
+    @Test("Require prior idle: Space exemption can be disabled")
+    func requirePriorIdleSpaceExemptionCanBeDisabled() {
+        var config = makeConfig()
+        config.requirePriorIdleMs = 150
+        config.ignoreSpacebarForShiftModifiers = false
+        let (engine, delegate) = makeEngine(config: config)
+
+        _ = engine.handleKeyDown(
+            keyCode: keySpace,
+            event: makeCGEvent(keyCode: keySpace, keyDown: true),
+            timestamp: 0.900
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keySpace,
+            event: makeCGEvent(keyCode: keySpace, keyDown: false),
+            timestamp: 0.950
+        )
+
+        let jDown = engine.handleKeyDown(
+            keyCode: keyJ,
+            event: makeCGEvent(keyCode: keyJ, keyDown: true),
+            timestamp: 1.000
+        )
+        let fDown = engine.handleKeyDown(
+            keyCode: keyF,
+            event: makeCGEvent(keyCode: keyF, keyDown: true),
+            timestamp: 1.050
+        )
+
+        #expect(jDown == .passThrough)
+        #expect(fDown == .passThrough)
+        #expect(delegate.actionLog.isEmpty)
+    }
+
+    @Test("Require prior idle: Space still affects non-Shift mod-taps")
+    func requirePriorIdleSpaceAffectsNonShiftModTaps() {
+        var config = makeConfig()
+        config.requirePriorIdleMs = 150
+        let (engine, delegate) = makeEngine(config: config)
+
+        _ = engine.handleKeyDown(
+            keyCode: keySpace,
+            event: makeCGEvent(keyCode: keySpace, keyDown: true),
+            timestamp: 0.900
+        )
+        let aDown = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+
+        #expect(aDown == .passThrough)
+        #expect(delegate.actionLog.isEmpty)
     }
 
     // MARK: - Hold modifier applied to subsequent keys

@@ -63,7 +63,7 @@ final class TapHoldEngine {
                 passedThroughKeys.insert(keyCode)
                 _ = machine.onPress(at: timestamp)
                 for (code, m) in machines where code != keyCode {
-                    m.recordOtherEvent(at: timestamp)
+                    m.recordOtherEvent(keyCode: keyCode, at: timestamp)
                 }
                 return .passThrough
             }
@@ -89,7 +89,7 @@ final class TapHoldEngine {
             // whether this key passes through or enters undecided, so that
             // require-prior-idle chains correctly across mod-tap keys)
             for (code, m) in machines where code != keyCode {
-                m.recordOtherEvent(at: timestamp)
+                m.recordOtherEvent(keyCode: keyCode, at: timestamp)
             }
 
             if action == .resolvedTap {
@@ -118,7 +118,7 @@ final class TapHoldEngine {
 
         // Record as other event on all machines
         for (_, m) in machines {
-            m.recordOtherEvent(at: timestamp)
+            m.recordOtherEvent(keyCode: keyCode, at: timestamp)
         }
 
         let hand = KeyHandClassifier.hand(for: keyCode)
