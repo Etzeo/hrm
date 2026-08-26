@@ -2,20 +2,27 @@ import CoreGraphics
 import Foundation
 
 final class EventTapManager: TapHoldEngineDelegate {
+    private struct ActiveModifierAssignment {
+        let modifier: Modifier
+        let flagsChangedKeyCode: UInt16
+    }
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var tapThread: Thread?
     private var engine: TapHoldEngine
-    private let synthesizer = EventSynthesizer()
+    private let synthesizer: any EventSynthesizing
     private var currentModifierFlags: CGEventFlags = []
+    private var activeModifierAssignments: [UInt16: ActiveModifierAssignment] = [:]
     /// Key codes currently being suppressed by the engine (undecided/hold).
     /// Used by the callback to skip auto-repeat events without entering the engine.
     private(set) var suppressedKeyCodes: Set<UInt16> = []
 
     private(set) var isRunning = false
 
-    init(engine: TapHoldEngine) {
+    init(engine: TapHoldEngine, synthesizer: any EventSynthesizing = EventSynthesizer()) {
         self.engine = engine
+        self.synthesizer = synthesizer
         engine.delegate = self
     }
 
@@ -54,6 +61,7 @@ final class EventTapManager: TapHoldEngineDelegate {
     func updateEngine(_ engine: TapHoldEngine) {
         self.engine = engine
         engine.delegate = self
+        engine.syntheticModifierFlags = currentModifierFlags
     }
 
     // MARK: - Event Processing (called from C callback)
@@ -98,22 +106,28 @@ final class EventTapManager: TapHoldEngineDelegate {
 
     func engineDidResolveHold(binding: KeyBinding) {
         guard let modifier = binding.modifier else { return }
-        currentModifierFlags.insert(modifier.flag)
-        engine.syntheticModifierFlags = currentModifierFlags
         let flagKeyCode = binding.position.hand == .left
             ? modifier.leftFlagsChanged
             : modifier.rightFlagsChanged
+
+        guard activeModifierAssignments[binding.keyCode] == nil else { return }
+        activeModifierAssignments[binding.keyCode] = ActiveModifierAssignment(
+            modifier: modifier,
+            flagsChangedKeyCode: flagKeyCode
+        )
+        updateSyntheticModifierFlags()
         synthesizer.postFlagsChanged(keyCode: flagKeyCode, flags: currentModifierFlags)
     }
 
     func engineDidResolveHoldRelease(binding: KeyBinding) {
-        guard let modifier = binding.modifier else { return }
-        currentModifierFlags.remove(modifier.flag)
-        engine.syntheticModifierFlags = currentModifierFlags
-        let flagKeyCode = binding.position.hand == .left
-            ? modifier.leftFlagsChanged
-            : modifier.rightFlagsChanged
-        synthesizer.postFlagsChanged(keyCode: flagKeyCode, flags: currentModifierFlags)
+        guard let assignment = activeModifierAssignments.removeValue(forKey: binding.keyCode) else {
+            return
+        }
+        updateSyntheticModifierFlags()
+        synthesizer.postFlagsChanged(
+            keyCode: assignment.flagsChangedKeyCode,
+            flags: currentModifierFlags
+        )
     }
 
     func engineDidResolveTap(binding: KeyBinding) {
@@ -132,6 +146,13 @@ final class EventTapManager: TapHoldEngineDelegate {
     }
 
     // MARK: - Private
+
+    private func updateSyntheticModifierFlags() {
+        currentModifierFlags = activeModifierAssignments.values.reduce(into: []) { flags, assignment in
+            flags.formUnion(assignment.modifier.flag)
+        }
+        engine.syntheticModifierFlags = currentModifierFlags
+    }
 
     private func runEventTapLoop() {
         let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)

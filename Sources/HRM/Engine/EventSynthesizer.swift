@@ -1,6 +1,13 @@
 import CoreGraphics
 
-final class EventSynthesizer {
+protocol EventSynthesizing {
+    func postKeyDown(keyCode: UInt16, flags: CGEventFlags)
+    func postKeyUp(keyCode: UInt16, flags: CGEventFlags)
+    func postFlagsChanged(keyCode: UInt16, flags: CGEventFlags)
+    func postEvent(_ event: CGEvent)
+}
+
+final class EventSynthesizer: EventSynthesizing {
     static let syntheticMarkerField = UInt32(42)
     private static let syntheticMarkerValue = Int64(0xDEAD_BEEF)
 
