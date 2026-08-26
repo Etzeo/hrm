@@ -85,6 +85,7 @@ If any key was pressed within this time window, the home row key **immediately t
 
 - **Default**: 150ms
 - **Range**: 0–999ms (0 disables)
+- **Ignore Spacebar for Shift Modifiers**: Enabled by default. Space does not count as prior activity for keys bound to Shift, allowing `Space` then a Shift home-row modifier to capitalize a character. It does not affect keys bound to Control, Option, or Command.
 
 ## Per-Key Overrides
 
