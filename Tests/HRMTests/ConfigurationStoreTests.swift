@@ -18,6 +18,7 @@ struct ConfigurationStoreTests {
         let config = store.load()
         #expect(config.enabled == true)
         #expect(config.quickTapTermMs == 150)
+        #expect(config.ignoreSpacebarForShiftModifiers == true)
         #expect(config.keyBindings.count == 10)
     }
 
@@ -29,13 +30,48 @@ struct ConfigurationStoreTests {
         var config = DefaultConfiguration.make()
         config.quickTapTermMs = 150
         config.requirePriorIdleMs = 100
+        config.ignoreSpacebarForShiftModifiers = false
 
         try store.save(config)
         let loaded = store.load()
 
         #expect(loaded.quickTapTermMs == 150)
         #expect(loaded.requirePriorIdleMs == 100)
+        #expect(loaded.ignoreSpacebarForShiftModifiers == false)
         #expect(loaded.keyBindings.count == 10)
+    }
+
+    @Test("Missing Shift-space setting migrates to enabled")
+    func migrateMissingIgnoreSpacebarForShiftModifiers() throws {
+        let dir = try makeTempDirectory()
+        let store = ConfigurationStore(directory: dir)
+        var original = DefaultConfiguration.make()
+        original.enabled = false
+        original.quickTapTermMs = 200
+        original.requirePriorIdleMs = 100
+        original.bilateralFiltering = false
+        original.holdTriggerOnRelease = false
+        original.keyBindings[0].enabled = false
+        original.keyBindings[0].modifier = .shift
+        original.keyBindings[0].quickTapTermMs = 250
+
+        let data = try JSONEncoder().encode(original)
+        var json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "ignoreSpacebarForShiftModifiers")
+        let oldFormatData = try JSONSerialization.data(withJSONObject: json)
+        try oldFormatData.write(to: dir.appending(component: "config.json"))
+
+        let loaded = store.load()
+
+        #expect(loaded.ignoreSpacebarForShiftModifiers == true)
+        #expect(loaded.quickTapTermMs == 200)
+        #expect(loaded.requirePriorIdleMs == 100)
+        #expect(loaded.enabled == false)
+        #expect(loaded.bilateralFiltering == false)
+        #expect(loaded.holdTriggerOnRelease == false)
+        #expect(loaded.keyBindings[0].enabled == false)
+        #expect(loaded.keyBindings[0].modifier == .shift)
+        #expect(loaded.keyBindings[0].quickTapTermMs == 250)
     }
 
     @Test("Per-key overrides round-trip correctly")

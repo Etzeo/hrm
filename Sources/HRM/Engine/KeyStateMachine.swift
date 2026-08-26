@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Foundation
 
 enum KeyState: Equatable {
@@ -24,6 +25,7 @@ final class KeyStateMachine {
 
     private let quickTapTerm: TimeInterval
     private let requirePriorIdle: TimeInterval
+    private let ignoreSpacebarForShiftModifiers: Bool
     private let bilateralFiltering: Bool
     private let holdTriggerOnRelease: Bool
 
@@ -31,6 +33,7 @@ final class KeyStateMachine {
         self.binding = binding
         self.quickTapTerm = Double(config.effectiveQuickTapTerm(for: binding)) / 1000.0
         self.requirePriorIdle = Double(config.effectiveRequirePriorIdle(for: binding)) / 1000.0
+        self.ignoreSpacebarForShiftModifiers = config.ignoreSpacebarForShiftModifiers
         self.holdTriggerOnRelease = config.holdTriggerOnRelease
         self.bilateralFiltering = config.effectiveBilateralFiltering(for: binding)
     }
@@ -40,12 +43,14 @@ final class KeyStateMachine {
         binding: KeyBinding,
         quickTapTerm: TimeInterval = 0,
         requirePriorIdle: TimeInterval = 0,
+        ignoreSpacebarForShiftModifiers: Bool = true,
         bilateralFiltering: Bool = false,
         holdTriggerOnRelease: Bool = false
     ) {
         self.binding = binding
         self.quickTapTerm = quickTapTerm
         self.requirePriorIdle = requirePriorIdle
+        self.ignoreSpacebarForShiftModifiers = ignoreSpacebarForShiftModifiers
         self.bilateralFiltering = bilateralFiltering
         self.holdTriggerOnRelease = holdTriggerOnRelease
     }
@@ -134,7 +139,12 @@ final class KeyStateMachine {
         return .resolvedHold
     }
 
-    func recordOtherEvent(at timestamp: TimeInterval) {
+    func recordOtherEvent(keyCode: UInt16, at timestamp: TimeInterval) {
+        guard !(ignoreSpacebarForShiftModifiers
+            && keyCode == UInt16(kVK_Space)
+            && binding.modifier == .shift) else {
+            return
+        }
         lastEventTimestamp = timestamp
     }
 

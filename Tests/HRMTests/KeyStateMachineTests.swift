@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Foundation
 import Testing
 @testable import HRM
@@ -11,6 +12,7 @@ struct KeyStateMachineTests {
     func makeMachine(
         quickTapTerm: TimeInterval = 0,
         requirePriorIdle: TimeInterval = 0,
+        ignoreSpacebarForShiftModifiers: Bool = true,
         bilateralFiltering: Bool = false,
         holdTriggerOnRelease: Bool = false
     ) -> KeyStateMachine {
@@ -18,6 +20,7 @@ struct KeyStateMachineTests {
             binding: Self.testBinding,
             quickTapTerm: quickTapTerm,
             requirePriorIdle: requirePriorIdle,
+            ignoreSpacebarForShiftModifiers: ignoreSpacebarForShiftModifiers,
             bilateralFiltering: bilateralFiltering,
             holdTriggerOnRelease: holdTriggerOnRelease
         )
@@ -123,7 +126,7 @@ struct KeyStateMachineTests {
     @Test("Require prior idle: recent activity resolves immediately as tap")
     func requirePriorIdleRecentActivity() {
         let sm = makeMachine(requirePriorIdle: 0.150)
-        sm.recordOtherEvent(at: 0.950)
+        sm.recordOtherEvent(keyCode: 0x0E, at: 0.950)
         let action = sm.onPress(at: 1.0)
         #expect(action == .resolvedTap)
     }
@@ -131,10 +134,64 @@ struct KeyStateMachineTests {
     @Test("Require prior idle: sufficient idle enters undecided normally")
     func requirePriorIdleSufficientIdle() {
         let sm = makeMachine(requirePriorIdle: 0.150)
-        sm.recordOtherEvent(at: 0.800)
+        sm.recordOtherEvent(keyCode: 0x0E, at: 0.800)
         let action = sm.onPress(at: 1.0)
         #expect(action == .none)
         #expect(sm.state == .undecided)
+    }
+
+    @Test("Require prior idle: Shift binding ignores Space when enabled")
+    func shiftBindingIgnoresSpaceWhenEnabled() {
+        let sm = makeMachine(requirePriorIdle: 0.150)
+        sm.recordOtherEvent(keyCode: UInt16(kVK_Space), at: 0.950)
+
+        let action = sm.onPress(at: 1.0)
+
+        #expect(action == .none)
+        #expect(sm.state == .undecided)
+    }
+
+    @Test("Require prior idle: Shift binding counts Space when disabled")
+    func shiftBindingCountsSpaceWhenDisabled() {
+        let sm = makeMachine(
+            requirePriorIdle: 0.150,
+            ignoreSpacebarForShiftModifiers: false
+        )
+        sm.recordOtherEvent(keyCode: UInt16(kVK_Space), at: 0.950)
+
+        let action = sm.onPress(at: 1.0)
+
+        #expect(action == .resolvedTap)
+    }
+
+    @Test("Require prior idle: non-Shift binding counts Space")
+    func nonShiftBindingCountsSpace() {
+        let controlBinding = KeyBinding(
+            keyCode: 0x00,
+            modifier: .control,
+            enabled: true,
+            position: .leftPinky
+        )
+        let sm = KeyStateMachine(
+            binding: controlBinding,
+            requirePriorIdle: 0.150
+        )
+        sm.recordOtherEvent(keyCode: UInt16(kVK_Space), at: 0.950)
+
+        let action = sm.onPress(at: 1.0)
+
+        #expect(action == .resolvedTap)
+    }
+
+    @Test("Require prior idle: ignored Space retains prior activity")
+    func ignoredSpaceRetainsPriorActivity() {
+        let sm = makeMachine(requirePriorIdle: 0.150)
+        sm.recordOtherEvent(keyCode: 0x0E, at: 0.900)
+        sm.recordOtherEvent(keyCode: UInt16(kVK_Space), at: 0.950)
+
+        let action = sm.onPress(at: 1.0)
+
+        #expect(action == .resolvedTap)
     }
 
     // MARK: - Bilateral Filtering

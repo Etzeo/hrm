@@ -143,6 +143,10 @@ struct MenuBarPanelView: View {
             .disabled(!appState.configuration.bilateralFiltering)
             msStepper("Quick Tap Term", value: quickTapTermBinding)
             msStepper("Require Prior Idle", value: requirePriorIdleBinding)
+            settingToggle(
+                "Ignore Spacebar for Shift Modifiers",
+                isOn: ignoreSpacebarForShiftModifiersBinding
+            )
         }
     }
 
@@ -243,6 +247,16 @@ struct MenuBarPanelView: View {
             get: { appState.configuration.requirePriorIdleMs },
             set: {
                 appState.configuration.requirePriorIdleMs = $0
+                appState.saveAndApply()
+            }
+        )
+    }
+
+    private var ignoreSpacebarForShiftModifiersBinding: Binding<Bool> {
+        Binding(
+            get: { appState.configuration.ignoreSpacebarForShiftModifiers },
+            set: {
+                appState.configuration.ignoreSpacebarForShiftModifiers = $0
                 appState.saveAndApply()
             }
         )

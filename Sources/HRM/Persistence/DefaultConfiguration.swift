@@ -4,6 +4,7 @@ enum DefaultConfiguration {
             enabled: true,
             quickTapTermMs: 150,
             requirePriorIdleMs: 150,
+            ignoreSpacebarForShiftModifiers: true,
             bilateralFiltering: true,
             holdTriggerOnRelease: true,
             keyBindings: defaultKeyBindings
