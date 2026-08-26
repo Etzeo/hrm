@@ -1,11 +1,18 @@
 <h1 align="center"><img alt="HRM" src="./Resources/AppIcon.png" width="128"></h1>
-<p align="center"><strong><big>HRM — Home Row Mods for macOS</big></strong></p>
+<p align="center"><strong><big>HRM — Home Row Mods for macOS (Fork)</big></strong></p>
 <p align="center"><sub>Icon from <a href="https://www.reddit.com/r/Skeuomorphism/comments/1qtoe7g/keycap_icons">Keycap Icons</a> by <a href="https://www.reddit.com/user/aphaits">/u/aphaits</a></sub></p>
 <br>
 
 ![Main Panel](./Resources/screen_01.jpg)
 
 A native macOS menu bar app that turns your home row keys into dual-function keys — tap for the letter, hold for a modifier. Built on a **timeless** tap-hold implementation where hold vs tap is decided entirely by other key activity, not by duration timers.
+
+## Fork Additions
+
+- Preserves typed key order during same-hand home-row rolls. ([#1](https://github.com/Etzeo/hrm/pull/1))
+- Extends Bilateral Filtering across the full physical keyboard, including the navigation cluster and keypad. ([#2](https://github.com/Etzeo/hrm/pull/2))
+- Treats Space, Fn/Globe, and unsupported vendor keys as neutral so they cannot trigger a hold. ([#2](https://github.com/Etzeo/hrm/pull/2))
+- Adds a default-enabled option to ignore Space when checking prior idle time for Shift modifiers. ([#3](https://github.com/Etzeo/hrm/pull/3))
 
 ## How It Works
 
