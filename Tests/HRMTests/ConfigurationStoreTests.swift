@@ -46,9 +46,14 @@ struct ConfigurationStoreTests {
         let dir = try makeTempDirectory()
         let store = ConfigurationStore(directory: dir)
         var original = DefaultConfiguration.make()
+        original.enabled = false
         original.quickTapTermMs = 200
         original.requirePriorIdleMs = 100
+        original.bilateralFiltering = false
+        original.holdTriggerOnRelease = false
         original.keyBindings[0].enabled = false
+        original.keyBindings[0].modifier = .shift
+        original.keyBindings[0].quickTapTermMs = 250
 
         let data = try JSONEncoder().encode(original)
         var json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -61,7 +66,12 @@ struct ConfigurationStoreTests {
         #expect(loaded.ignoreSpacebarForShiftModifiers == true)
         #expect(loaded.quickTapTermMs == 200)
         #expect(loaded.requirePriorIdleMs == 100)
+        #expect(loaded.enabled == false)
+        #expect(loaded.bilateralFiltering == false)
+        #expect(loaded.holdTriggerOnRelease == false)
         #expect(loaded.keyBindings[0].enabled == false)
+        #expect(loaded.keyBindings[0].modifier == .shift)
+        #expect(loaded.keyBindings[0].quickTapTermMs == 250)
     }
 
     @Test("Per-key overrides round-trip correctly")

@@ -483,6 +483,28 @@ struct TapHoldEngineTests {
         #expect(delegate.actionLog.isEmpty)
     }
 
+    @Test("Require prior idle: Space exemption follows custom Shift binding")
+    func requirePriorIdleSpaceFollowsCustomShiftBinding() {
+        var config = makeConfig()
+        config.requirePriorIdleMs = 150
+        config.keyBindings[0].modifier = .shift
+        let (engine, delegate) = makeEngine(config: config)
+
+        _ = engine.handleKeyDown(
+            keyCode: keySpace,
+            event: makeCGEvent(keyCode: keySpace, keyDown: true),
+            timestamp: 0.900
+        )
+        let aDown = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+
+        #expect(aDown == .suppress)
+        #expect(delegate.actionLog.isEmpty)
+    }
+
     // MARK: - Hold modifier applied to subsequent keys
 
     @Test("Held mod-tap key: subsequent regular keys pass through after hold resolves")
