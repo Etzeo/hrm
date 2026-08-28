@@ -15,6 +15,7 @@ A native macOS menu bar app that turns your home row keys into dual-function key
 - Adds a default-enabled option to ignore Space when checking prior idle time for Shift modifiers. ([#3](https://github.com/Etzeo/hrm/pull/3))
 - Requires hold-trigger keys to be pressed after the home-row modifier; pre-held keys and auto-repeat events cannot incorrectly activate a hold. ([#4](https://github.com/Etzeo/hrm/pull/4))
 - Keeps a modifier active until every home-row key assigned to it is released. ([#5](https://github.com/Etzeo/hrm/pull/5))
+- Applies setting changes after an active home-row-mod gesture completes, so its key events keep original behavior.
 
 ## How It Works
 

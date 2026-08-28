@@ -14,6 +14,8 @@ final class TapHoldEngine {
     private var config: Configuration
     private var passedThroughKeys: Set<UInt16> = []
     private var pendingTaps: [(binding: KeyBinding, pressTimestamp: TimeInterval)] = []
+    private var pressedKeyCodes: Set<UInt16> = []
+    private var pendingConfig: Configuration?
     weak var delegate: TapHoldEngineDelegate?
 
     init(config: Configuration) {
@@ -22,8 +24,10 @@ final class TapHoldEngine {
     }
 
     func updateConfig(_ newConfig: Configuration) {
-        self.config = newConfig
-        rebuildMachines()
+        // A source key's down and up events must use one configuration. Applying
+        // midway can lose its tap or leave a synthesized modifier held.
+        pendingConfig = newConfig
+        applyPendingConfigIfQuiescent()
     }
 
     // MARK: - Event Processing
@@ -40,9 +44,13 @@ final class TapHoldEngine {
 
     /// Tracks which modifier flags were synthesized by HRM (via hold resolution).
     var syntheticModifierFlags: CGEventFlags = []
+    var isEnabled: Bool { config.enabled }
 
     func handleKeyDown(keyCode: UInt16, event: CGEvent, timestamp: TimeInterval) -> EventResult {
         let isInitialKeyDown = event.getIntegerValueField(.keyboardEventAutorepeat) == 0
+        if isInitialKeyDown {
+            pressedKeyCodes.insert(keyCode)
+        }
 
         // If this is a configured mod-tap key
         if let machine = machines[keyCode] {
@@ -174,6 +182,10 @@ final class TapHoldEngine {
     }
 
     func handleKeyUp(keyCode: UInt16, event: CGEvent, timestamp: TimeInterval) -> EventResult {
+        guard pressedKeyCodes.remove(keyCode) != nil else {
+            return .passThrough
+        }
+        defer { applyPendingConfigIfQuiescent() }
         if let machine = machines[keyCode] {
             // Key was passed through on press (require-prior-idle / quick-tap),
             // pass through release too without synthesizing
@@ -307,9 +319,29 @@ final class TapHoldEngine {
 
     private func rebuildMachines() {
         machines.removeAll()
+        guard config.enabled else { return }
+
         for binding in config.keyBindings where binding.enabled && binding.modifier != nil {
             machines[binding.keyCode] = KeyStateMachine(binding: binding, config: config)
         }
+    }
+
+    private func applyPendingConfigIfQuiescent() {
+        guard let pendingConfig, isQuiescent else { return }
+
+        self.pendingConfig = nil
+        config = pendingConfig
+        rebuildMachines()
+    }
+
+    private var isQuiescent: Bool {
+        pressedKeyCodes.isEmpty
+            && passedThroughKeys.isEmpty
+            && pendingTaps.isEmpty
+            && buffer.isEmpty
+            && machines.values.allSatisfy {
+                $0.state == .idle || $0.state == .quickTapWindow
+            }
     }
 
 }

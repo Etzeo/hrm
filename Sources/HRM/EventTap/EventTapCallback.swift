@@ -37,5 +37,5 @@ func eventTapCallback(
         return Unmanaged.passUnretained(event)
     }
 
-    return manager.processEvent(proxy: proxy, type: type, event: event)
+    return manager.processEvent(type: type, event: event)
 }

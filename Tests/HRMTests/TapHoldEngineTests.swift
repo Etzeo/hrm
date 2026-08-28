@@ -791,4 +791,255 @@ struct TapHoldEngineTests {
         #expect(delegate.holds.isEmpty)
         #expect(delegate.taps.isEmpty)
     }
+
+    @Test("Config update waits for an active hold to release")
+    func configUpdateWaitsForActiveHold() {
+        let (engine, delegate) = makeEngine()
+
+        _ = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+        _ = engine.handleKeyDown(
+            keyCode: keyE,
+            event: makeCGEvent(keyCode: keyE, keyDown: true),
+            timestamp: 1.030
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyE,
+            event: makeCGEvent(keyCode: keyE, keyDown: false),
+            timestamp: 1.060
+        )
+        #expect(delegate.holds.map(\.keyCode) == [keyA])
+
+        var updatedConfig = makeConfig()
+        updatedConfig.keyBindings[0].enabled = false
+        engine.updateConfig(updatedConfig)
+
+        _ = engine.handleKeyUp(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: false),
+            timestamp: 1.090
+        )
+        #expect(delegate.holdReleases.map(\.keyCode) == [keyA])
+
+        let nextPress = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.120
+        )
+        #expect(nextPress == .passThrough)
+    }
+
+    @Test("Config update waits for key held before it becomes an HRM key")
+    func configUpdateWaitsForUnboundKeyRelease() {
+        let (engine, delegate) = makeEngine()
+        let keyG: UInt16 = 0x05
+
+        let gDown = engine.handleKeyDown(
+            keyCode: keyG,
+            event: makeCGEvent(keyCode: keyG, keyDown: true),
+            timestamp: 1.000
+        )
+        #expect(gDown == .passThrough)
+
+        var updatedConfig = makeConfig()
+        let gBindingIndex = updatedConfig.keyBindings.firstIndex { $0.keyCode == keyG }!
+        updatedConfig.keyBindings[gBindingIndex].modifier = .control
+        updatedConfig.keyBindings[gBindingIndex].enabled = true
+        engine.updateConfig(updatedConfig)
+
+        let gUp = engine.handleKeyUp(
+            keyCode: keyG,
+            event: makeCGEvent(keyCode: keyG, keyDown: false),
+            timestamp: 1.030
+        )
+        #expect(gUp == .passThrough)
+
+        let nextGDown = engine.handleKeyDown(
+            keyCode: keyG,
+            event: makeCGEvent(keyCode: keyG, keyDown: true),
+            timestamp: 1.060
+        )
+        #expect(nextGDown == .suppress)
+        _ = engine.handleKeyUp(
+            keyCode: keyG,
+            event: makeCGEvent(keyCode: keyG, keyDown: false),
+            timestamp: 1.090
+        )
+        #expect(delegate.taps.map(\.keyCode) == [keyG])
+    }
+
+    @Test("Disabling HRM waits for active source release")
+    func disablingWaitsForActiveSourceRelease() {
+        let (engine, delegate) = makeEngine()
+
+        _ = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+
+        var disabledConfig = makeConfig()
+        disabledConfig.enabled = false
+        engine.updateConfig(disabledConfig)
+
+        _ = engine.handleKeyUp(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: false),
+            timestamp: 1.030
+        )
+        #expect(delegate.taps.map(\.keyCode) == [keyA])
+
+        let nextPress = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.060
+        )
+        #expect(nextPress == .passThrough)
+    }
+
+    @Test("Config update waits for pending HRM taps")
+    func configUpdateWaitsForPendingTaps() {
+        let (engine, delegate) = makeEngine(config: DefaultConfiguration.make())
+
+        _ = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+        _ = engine.handleKeyDown(
+            keyCode: keyS,
+            event: makeCGEvent(keyCode: keyS, keyDown: true),
+            timestamp: 1.030
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyS,
+            event: makeCGEvent(keyCode: keyS, keyDown: false),
+            timestamp: 1.060
+        )
+        #expect(delegate.taps.isEmpty)
+
+        var disabledConfig = makeConfig()
+        disabledConfig.enabled = false
+        engine.updateConfig(disabledConfig)
+
+        _ = engine.handleKeyUp(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: false),
+            timestamp: 1.090
+        )
+        #expect(delegate.actionLog == [.tap("leftPinky"), .tap("leftRing")])
+
+        let nextPress = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.120
+        )
+        #expect(nextPress == .passThrough)
+    }
+
+    @Test("Config update waits for buffered input to drain")
+    func configUpdateWaitsForBufferedInput() {
+        let (engine, delegate) = makeEngine()
+
+        _ = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+        _ = engine.handleKeyDown(
+            keyCode: keyE,
+            event: makeCGEvent(keyCode: keyE, keyDown: true),
+            timestamp: 1.030
+        )
+
+        var disabledConfig = makeConfig()
+        disabledConfig.enabled = false
+        engine.updateConfig(disabledConfig)
+
+        _ = engine.handleKeyUp(
+            keyCode: keyE,
+            event: makeCGEvent(keyCode: keyE, keyDown: false),
+            timestamp: 1.060
+        )
+        _ = engine.handleKeyUp(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: false),
+            timestamp: 1.090
+        )
+
+        #expect(delegate.flushedEvents.count == 1)
+        #expect(delegate.flushedEvents[0].map(\.keyCode) == [keyE, keyE])
+        #expect(delegate.flushedEvents[0].map(\.isKeyDown) == [true, false])
+
+        let nextPress = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.120
+        )
+        #expect(nextPress == .passThrough)
+    }
+
+    @Test("Latest config replaces earlier request during active gesture")
+    func latestConfigWinsDuringActiveGesture() {
+        let (engine, _) = makeEngine()
+
+        _ = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+
+        var disabledConfig = makeConfig()
+        disabledConfig.enabled = false
+        engine.updateConfig(disabledConfig)
+        engine.updateConfig(makeConfig())
+
+        _ = engine.handleKeyUp(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: false),
+            timestamp: 1.030
+        )
+
+        let nextPress = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.060
+        )
+        #expect(nextPress == .suppress)
+    }
+
+    @Test("Disabled engine tracks keys held before HRM is enabled")
+    func disabledEngineTracksKeysHeldBeforeEnabling() {
+        var disabledConfig = makeConfig()
+        disabledConfig.enabled = false
+        let (engine, delegate) = makeEngine(config: disabledConfig)
+
+        let aDown = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.000
+        )
+        #expect(aDown == .passThrough)
+
+        engine.updateConfig(makeConfig())
+
+        let aUp = engine.handleKeyUp(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: false),
+            timestamp: 1.030
+        )
+        #expect(aUp == .passThrough)
+        #expect(delegate.taps.isEmpty)
+
+        let nextADown = engine.handleKeyDown(
+            keyCode: keyA,
+            event: makeCGEvent(keyCode: keyA, keyDown: true),
+            timestamp: 1.060
+        )
+        #expect(nextADown == .suppress)
+    }
+
 }
