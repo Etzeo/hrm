@@ -64,9 +64,8 @@ final class AppState: ObservableObject {
         guard eventTapManager == nil else { return }
         let manager = EventTapManager(engine: engine)
         self.eventTapManager = manager
-        if configuration.enabled {
-            manager.start()
-        }
+        manager.requestConfigurationUpdate(configuration)
+        manager.start()
     }
 
     func stopEventTap() {
@@ -76,15 +75,7 @@ final class AppState: ObservableObject {
 
     func saveAndApply() {
         try? store.save(configuration)
-        engine.updateConfig(configuration)
-
-        if configuration.enabled {
-            if eventTapManager?.isRunning == false {
-                eventTapManager?.start()
-            }
-        } else {
-            eventTapManager?.stop()
-        }
+        eventTapManager?.requestConfigurationUpdate(configuration)
     }
 
     func checkAccessibility() {
